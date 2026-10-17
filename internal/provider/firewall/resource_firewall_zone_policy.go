@@ -195,6 +195,36 @@ func (m *FirewallZonePolicySourceModel) AttributeTypes() map[string]attr.Type {
 	return attrs
 }
 
+// stringListToInts converts a list of numeric strings (the schema type) into the []int the controller API uses.
+func stringListToInts(ctx context.Context, list types.List, target *[]int, attribute string) diag.Diagnostics {
+	diags := diag.Diagnostics{}
+	var raw []string
+	diags.Append(ut.ListElementsAs(ctx, list, &raw)...)
+	if diags.HasError() {
+		return diags
+	}
+	out := make([]int, 0, len(raw))
+	for _, s := range raw {
+		n, err := strconv.Atoi(s)
+		if err != nil {
+			diags.AddError("Invalid "+attribute, fmt.Sprintf("%q is not a numeric ID: %s", s, err))
+			return diags
+		}
+		out = append(out, n)
+	}
+	*target = out
+	return diags
+}
+
+// intsToStrings converts the controller's numeric IDs into the strings the schema exposes.
+func intsToStrings(ids []int) []string {
+	out := make([]string, len(ids))
+	for i, n := range ids {
+		out[i] = strconv.Itoa(n)
+	}
+	return out
+}
+
 // FirewallZonePolicyDestinationModel represents the destination configuration for a firewall zone policy.
 type FirewallZonePolicyDestinationModel struct {
 	FirewallPolicyTargetModel
@@ -382,12 +412,12 @@ func (m *FirewallZonePolicyModel) AsUnifiModel(ctx context.Context) (interface{}
 		}
 
 		if len(destination.AppCategoryIDs.Elements()) > 0 {
-			diags.Append(ut.ListElementsAs(ctx, destination.AppCategoryIDs, &unifiDestination.AppCategoryIDs)...)
+			diags.Append(stringListToInts(ctx, destination.AppCategoryIDs, &unifiDestination.AppCategoryIDs, "app_category_ids")...)
 			unifiDestination.MatchingTarget = "APP_CATEGORY"
 		}
 
 		if len(destination.AppIDs.Elements()) > 0 {
-			diags.Append(ut.ListElementsAs(ctx, destination.AppIDs, &unifiDestination.AppIDs)...)
+			diags.Append(stringListToInts(ctx, destination.AppIDs, &unifiDestination.AppIDs, "app_ids")...)
 			unifiDestination.MatchingTarget = "APP"
 		}
 
@@ -498,11 +528,11 @@ func (m *FirewallZonePolicyModel) mergeDestination(ctx context.Context, model *u
 	}
 	switch model.Destination.MatchingTarget {
 	case "APP_CATEGORY":
-		appCategories, d := types.ListValueFrom(ctx, types.StringType, model.Destination.AppCategoryIDs)
+		appCategories, d := types.ListValueFrom(ctx, types.StringType, intsToStrings(model.Destination.AppCategoryIDs))
 		diags.Append(d...)
 		destModel.AppCategoryIDs = appCategories
 	case "APP":
-		apps, d := types.ListValueFrom(ctx, types.StringType, model.Destination.AppIDs)
+		apps, d := types.ListValueFrom(ctx, types.StringType, intsToStrings(model.Destination.AppIDs))
 		diags.Append(d...)
 		destModel.AppIDs = apps
 	case "NETWORK":

@@ -173,7 +173,9 @@ func (r *rsyslogdResource) ConfigValidators(_ context.Context) []resource.Config
 			path.MatchRoot("this_controller"),
 			path.MatchRoot("this_controller_encrypted_only"),
 		),
-		validators.RequiredTogetherIf(path.MatchRoot("enabled"), types.BoolValue(true), path.MatchRoot("contents"), path.MatchRoot("ip")),
+		// Only a remote syslog server needs an address and log types; with this_controller = true the logs go to
+		// the controller itself (the UniFi UI stores neither ip nor contents then).
+		validators.RequiredTogetherIf(path.MatchRoot("this_controller"), types.BoolValue(false), path.MatchRoot("contents"), path.MatchRoot("ip")),
 	}
 }
 
